@@ -7,8 +7,11 @@ var parse_address = function(origin_address, callback) {
 
     // 找出地址的行政區
     search_area(address, [callback], function(area_ids, word, argument){
-        // 有行政區之後，再拿剩下的去找道路名稱
         var callback = argument[0];
+        if (area_ids === null) {
+            return callback({input: address, error: '找不到行政區'});
+        }
+        // 有行政區之後，再拿剩下的去找道路名稱
         search_road(area_ids, word, function(result) {
                 result.input = address;
                 callback(result);
@@ -20,10 +23,15 @@ var area_name_map = null;
 
 var get_area_data = function(argument, callback){
     // 已經抓過資料就不需要再抓了
+    if (null !== area_name_map && area_name_map.waiting) {
+        return area_name_map.waiting.push([argument, callback]);
+    }
+
     if (area_name_map !== null) {
         return callback(argument);
     }
-    area_name_map = {};
+    area_name_map = {waiting: [[argument, callback]]};
+    var tmp_area_name_map = {};
     area_max_length = 0;
     // https://sheethub.com/area.reference.tw/中華民國行政區_map_名稱2014?format=csv
     area_versions = ['custom', '2014', '2010', '1984'];
@@ -40,14 +48,20 @@ var get_area_data = function(argument, callback){
                      area_data[version].map(function(rows){
                         var name = rows[0];
                         var id = rows[1];
-                        if (area_name_map[name]) {
+                        if (tmp_area_name_map[name]) {
                                 return;
                         }
-                        area_name_map[name] = id;
+                        tmp_area_name_map[name] = id;
                         area_max_length = Math.max(area_max_length, name.length);
                      });
                 });
-                callback(argument);
+                var waitings = area_name_map.waiting;
+                area_name_map = tmp_area_name_map;
+                waitings.map(function(waiting){
+                    var argument = waiting[0];
+                    var callback = waiting[1];
+                    return callback(argument);
+                });
             }
         });
     });
@@ -77,7 +91,7 @@ var search_area = function(address, argument, callback){
             }
             break;
         }
-        throw '找不到行政區';
+        return callback(null, address, argument);
     });
 };
 
