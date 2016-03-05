@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Address API</title>
+<script src="address.js"></script>
+<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.css">
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-3 form-group">
+            輸入:<br>
+            <form id="address-form">
+                <textarea id="input" class="form-control"></textarea>
+                <button type="submit">轉換</button>
+            </form>
+        </div>
+        <div class="col-md-9 form-group">
+            結果:<br>
+            <textarea id="output" class="form-control"></textarea>
+        </div>
+    </div>
+</div>
+<script>
+$('#address-form').submit(function(e){
+    e.preventDefault();
+    $('#output').val("input,address,x,y,warning");
+    $('#input').val().split("\n").map(function(line){
+        if (line != '') {
+            parse_address(line, function(result){
+                    var output_array = [];
+                    output_array.push(result.input);
+                    output_array.push(result[0].FULL_ADDR);
+                    output_array.push(result[0].X);
+                    output_array.push(result[0].Y);
+                    if (result[0].warnings) {
+                        output_array.push(result[0].warnings.join(';'));
+                    }
+                    $('#output').val($('#output').val() + "\n" + output_array.join(','));
+            });
+        }
+
+    });
+});
+</script>
+</body>
+</html> 
