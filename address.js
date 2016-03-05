@@ -212,7 +212,7 @@ var search_address = function(area_ids, road, origin_word, warnings, callback) {
         if (matches.length > 1) {
             var no_warning_matches = matches.filter(function(v) { return !v['warnings']; });
             if (no_warning_matches.length == 1) {
-                return eallback(no_warning_matches);
+                return callback(no_warning_matches);
             }
             addWarning(matches[0], '吻合地址超過一個');
             return callback(matches);
