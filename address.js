@@ -228,7 +228,7 @@ var search_address = function(area_ids, road, origin_word, warnings, callback) {
             if (no_warning_matches.length == 1) {
                 return callback(no_warning_matches);
             }
-            addWarning(matches[0], '吻合地址超過一個');
+            addWarning(matches[0], '吻合地址超過一個 (' + matches.map(function(a) { return a.FULL_ADDR; }).join(',') + ')');
             return callback(matches);
         }
 
