@@ -347,7 +347,7 @@ var get_csv = function(url, callback){
         var text = this.responseText.replace(/\s+$/m, '');
         callback(text.split("\n").map(function(line) { return line.split(","); }));
     };
-    oReq.open("get", "//ronnywang.github.io/taiwan-address-lookup/" + url, true);
+    oReq.open("get", "//ronnywang.github.io/taiwan-address-data/" + url, true);
     oReq.send();
 };
 
