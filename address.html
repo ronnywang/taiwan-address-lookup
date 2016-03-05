@@ -20,29 +20,39 @@
         </div>
         <div class="col-md-9 form-group">
             結果:<br>
-            <textarea id="output" class="form-control" style="height: 400px"></textarea>
+            <textarea id="output" class="form-control" style="height: 400px"></textarea><br>
+            <span id="message"></span>
         </div>
     </div>
 </div>
 <script>
 $('#address-form').submit(function(e){
     e.preventDefault();
+    var lines = $('#input').val().split("\n").filter(function(s){ return s != ''; });
+    var c = 0;
+    $('#message').text('處理進度: ' + c + ' / ' + lines.length);
     $('#output').val("input,address,x,y,warning");
-    $('#input').val().split("\n").map(function(line){
-        if (line != '') {
-            parse_address(line, function(result){
-                    var output_array = [];
-                    output_array.push(result.input);
-                    output_array.push(result[0].FULL_ADDR);
-                    output_array.push(result[0].X);
-                    output_array.push(result[0].Y);
-                    if (result[0].warnings) {
-                        output_array.push(result[0].warnings.join(';'));
-                    }
-                    $('#output').val($('#output').val() + "\n" + output_array.join(','));
-            });
-        }
-
+    lines.map(function(line){
+        parse_address(line, function(result){
+            var output_array = [];
+            output_array.push(result.input);
+            if (result.error) {
+                output_array.push('');
+                output_array.push('');
+                output_array.push('');
+                output_array.push(result.error);
+            } else {
+                output_array.push(result[0].FULL_ADDR);
+                output_array.push(result[0].X);
+                output_array.push(result[0].Y);
+                if (result[0].warnings) {
+                    output_array.push(result[0].warnings.join(';'));
+                }
+            }
+            $('#output').val($('#output').val() + "\n" + output_array.join(','));
+            c ++;
+            $('#message').text('處理進度: ' + c + ' / ' + lines.length);
+        });
     });
 });
 </script>
