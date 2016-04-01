@@ -391,10 +391,16 @@ var search_road = function(area_ids, origin_word, callback){
 };
 
 var get_csv = function(url, callback){
+    get_content(url, function(content){
+        var text = content.replace(/\s+$/m, '');
+        callback(text.split("\n").map(function(line) { return line.split(","); }));
+    });
+};
+
+var get_content = function(url, callback){
     var oReq = new XMLHttpRequest();
     oReq.onload = function(){
-        var text = this.responseText.replace(/\s+$/m, '');
-        callback(text.split("\n").map(function(line) { return line.split(","); }));
+        callback(this.responseText);
     };
     oReq.open("get", url, true);
     oReq.send();
