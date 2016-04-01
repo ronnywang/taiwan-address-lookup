@@ -11,3 +11,5 @@
 --------
 資料是來自 http://tgos.nat.gov.tw/
 目前放在 https://github.com/ronnywang/taiwan-address-data
+郵遞區號 http://data.gov.tw/node/5948
+郵遞區號資料處理程式 https://github.com/ronnywang/address-postcode
