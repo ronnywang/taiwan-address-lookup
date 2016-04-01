@@ -1,3 +1,126 @@
+// 預載所有需要資料
+
+var data_loaded = -1;
+var data_needed = [
+    'name_map',      // 行政區名稱開頭對應到行政區代碼, 存入 area_name_map 變數中
+    'area',          // 行政區代碼詳細資料
+    'postcode_road', // 郵遞區號中的道路資料
+];
+var data_load_process = {};
+var load_data_callback_queue = [];
+
+var data_all_loaded = function() {
+    return data_loaded == data_needed.length;
+};
+
+// 預載所有需要的資料
+var load_data = function(callback){
+    if (data_loaded == -1) {
+        data_loaded = 0;
+        load_data_callback_queue.push(callback);
+        data_needed.map(function(k) {
+            data_load_process[k](function(){
+                console.log("data " + k + " is loaded");
+                data_loaded ++;
+                if (data_all_loaded()) {
+                    console.log("all data is loaded, run callback: " + load_data_callback_queue.length);
+                    load_data_callback_queue.map(function(cb){
+                        cb();
+                    });
+                }
+            });
+        });
+        return;
+    }
+
+    if (data_all_loaded()) {
+        return callback();
+    }
+
+    return load_data_callback_queue.push(callback);
+};
+
+var area_name_map = {};
+
+var area_name = {};
+data_load_process['area'] = function(callback){
+    // wget 'https://sheethub.com/area.reference.tw/%E4%B8%AD%E8%8F%AF%E6%B0%91%E5%9C%8B%E8%A1%8C%E6%94%BF%E5%8D%80?sql=SELECT+dgbas_id%2C+name+FROM+this+ORDER+BY+_id_+ASC&format=csv' > area.csv
+    get_csv('area.csv', function(records){
+        var columns = records.shift();
+        records.map(function(rows){
+            area_name[rows[0]] = rows[1];
+        });
+        callback();
+    });
+};
+
+data_load_process['name_map'] = function(callback){
+    area_max_length = 0;
+    // https://sheethub.com/area.reference.tw/中華民國行政區_map_名稱2014?format=csv
+    area_versions = ['custom', '2014', '2010', '1984'];
+    var area_data = {};
+    versions_loaded = 0;
+    area_versions.map(function(version){
+        get_csv('./area_' + version + '.csv', function(records){
+            var columns = records.shift();
+            area_data[version] = records;
+            versions_loaded ++;
+
+            if (versions_loaded == area_versions.length) {
+                area_versions.map(function(version){
+                     area_data[version].map(function(rows){
+                        var name = rows[0];
+                        var id = rows[1];
+                        if (area_name_map[name]) {
+                                return;
+                        }
+                        area_name_map[name] = id;
+                        area_max_length = Math.max(area_max_length, name.length);
+                     });
+                });
+                callback();
+            }
+        });
+    });
+};
+
+var road_name_map = null;
+var road_max_length = null;
+
+data_load_process['postcode_road'] = function(callback){
+    get_csv('https://ronnywang.github.io/address-postcode/data/road.csv', function(records){
+        var columns = records.shift();
+        road_name_map = {};
+        road_max_length = {};
+
+        records.map(function(rows){
+            var id = rows[0];
+            var name = rows[1];
+            if (!road_name_map[id]) {
+                road_name_map[id] = {};
+                road_max_length[id] = 0;
+            }
+
+            var std_name = transferArabicNumber(name);
+            std_name = transferRareWord(std_name);
+            var fuzzy_names = [];
+            if (std_name.match(/[路街巷]/)) {
+                fuzzy_names.push(std_name.replace(/[路街巷]/g, 'x'));
+            }
+            road_name_map[id]['s' + std_name] = name; // 完整路名
+            road_name_map[id]['sp' + std_name.substr(0, 1)] = true; // 字首拿來加速
+            fuzzy_names.map(function(fuzzy_name){
+                road_name_map[id]['f' + fuzzy_name] = name; // 模糊比對路名
+                road_name_map[id]['fp' + fuzzy_name.substr(0, 1)] = true; // 模糊比對字首
+            });
+            road_max_length[id] = Math.max(road_max_length[id], std_name.length);
+        });
+        return callback();
+    });
+};
+
+
+// 解析地址，並把結果傳給 callback
 var parse_address = function(origin_address, callback) {
     // 先拿掉空白
     var address = origin_address.replace(/ /g, '');
@@ -6,8 +129,7 @@ var parse_address = function(origin_address, callback) {
     address = address.replace(/^[0-9]+/, '');
 
     // 找出地址的行政區
-    search_area(address, [callback], function(area_ids, word, argument){
-        var callback = argument[0];
+    search_area(address, function(area_ids, word){
         if (area_ids === null) {
             return callback({input: address, error: '找不到行政區'});
         }
@@ -19,119 +141,112 @@ var parse_address = function(origin_address, callback) {
     });
 };
 
-var area_name_map = null;
-
-var get_area_data = function(argument, callback){
-    // 已經抓過資料就不需要再抓了
-    if (null !== area_name_map && area_name_map.waiting) {
-        return area_name_map.waiting.push([argument, callback]);
-    }
-
-    if (area_name_map !== null) {
-        return callback(argument);
-    }
-    area_name_map = {waiting: [[argument, callback]]};
-    var tmp_area_name_map = {};
-    area_max_length = 0;
-    // https://sheethub.com/area.reference.tw/中華民國行政區_map_名稱2014?format=csv
-    area_versions = ['custom', '2014', '2010', '1984'];
-    area_data = {};
-    versions_loaded = 0;
-    area_versions.map(function(version){
-        get_csv('area_' + version + '.csv', function(records){
-            var columns = records.shift();
-            area_data[version] = records;
-            versions_loaded ++;
-
-            if (versions_loaded == area_versions.length) {
-                area_versions.map(function(version){
-                     area_data[version].map(function(rows){
-                        var name = rows[0];
-                        var id = rows[1];
-                        if (tmp_area_name_map[name]) {
-                                return;
-                        }
-                        tmp_area_name_map[name] = id;
-                        area_max_length = Math.max(area_max_length, name.length);
-                     });
-                });
-                var waitings = area_name_map.waiting;
-                area_name_map = tmp_area_name_map;
-                waitings.map(function(waiting){
-                    var argument = waiting[0];
-                    var callback = waiting[1];
-                    return callback(argument);
-                });
-            }
-        });
-    });
-};
-
-var search_area = function(address, argument, callback){
-    get_area_data([address, argument, callback], function(argument){
-        var address = argument[0];
-        var callback = argument[2];
-        var argument = argument[1];
-        // 先把一些罕見字替代掉
-        var address = transferRareWord(address);
-        address = address.replace(/^(福建省|台灣省|臺灣省)/, '');
-        address = address.replace(/^(南部科學工業園區|新竹科學工業園區|中部科學工業園區|楠梓加工出口區)/, '');
-
-        // 從 address 找出屬於哪個行政區
-        while (true) {
-            // 從長度最長的符合的來找
-            for (var len = Math.min(area_max_length, address.length); len > 0; len --) {
-                var word = address.substr(0, len);
-                if (!area_name_map[word]) {
-                    continue;
-                }
-
-                var area_ids = get_area_ids(area_name_map[word]);
-                return callback(area_ids, address.substr(len), argument);
-            }
+var get_top_column = function(result, after_column){
+    var order = ['SECTION', 'LANE', 'ALLEY', 'NUMBER'];
+    for (var i = 0; after_column && i < order.length; i ++) {
+        if (!result[order[i]]) {
+            continue;
+        }
+        if (after_column == order[i]) {
             break;
         }
-        return callback(null, address, argument);
+    }
+
+    for (; i < order.length; i ++) {
+        if (!result[order[i]]) {
+            continue;
+        }
+        return order[i];
+    }
+};
+
+var check_postcode_cond = function(result, cond, level) {
+    if (cond.substr(0, 1) == '=') {
+        terms = cond.substr(1).split(':');
+        column = terms[0];
+        value = terms[1];
+        if (column != get_top_column(result, level)) {
+            return false;
+        }
+        // TODO: 前面沒其他欄位
+        if (result[column].substr(0, result[column].length - 1) == value) {
+            return column;
+        }
+        return false;
+    } else if (cond == 'all') {
+        return true;
+    } else if (cond == 'even') {
+        top_column = get_top_column(result, level);
+        return (parseInt(result[top_column].substr(0, result[top_column].length - 1)) % 2 == 0) ? top_column : false;
+    } else if (cond == 'odd') {
+        top_column = get_top_column(result, level);
+        return parseInt(result[top_column].substr(0, result[top_column].length - 1)) % 2 ? top_column : false;
+    } else if (cond.substr(0, 1) == '>') {
+        top_column = get_top_column(result, level);
+        return parseInt(result[top_column].substr(0, result[top_column].length - 1)) >= parseInt(cond.split(':')[1]);
+    } else if (cond.substr(0, 1) == '<') {
+        top_column = get_top_column(result, level);
+        return parseInt(result[top_column].substr(0, result[top_column].length - 1)) <= parseInt(cond.split(':')[1]);
+    }
+console.log(result);
+console.log(cond);
+return false;
+};
+
+var query_postcode = function(result, callback){
+    get_csv('https://ronnywang.github.io/address-postcode/data/' + result.COUNTY + '-' + result.ROAD + '.csv', function(records){
+        check_record:
+        for (var i = 0; i < records.length; i ++) {
+            var record = records[i];
+            var conds = record[3].split(';');
+            var level = '';
+           
+            for (var j = 0; j < conds.length; j ++) {
+                var result_level = check_postcode_cond(result, conds[j], level);
+                if (!result_level) {
+                    continue check_record;
+                }
+                level = result_level;
+            }
+            record[1] = area_name[record[1]];
+            return callback({
+                postcode: record[0],
+                town_id: record[1],
+                town_name: area_name[record[1]],
+                postcode_def: record[2],
+            });
+        }
+        return callback('notfound');
     });
 };
 
-var road_name_map = null;
-var road_max_length = null;
-
-var get_road_data = function(argument, callback){
-    if (road_name_map) {
-        return callback(argument);
+var search_area = function(address, callback){
+    if (!data_all_loaded()) {
+        return load_data(function(){
+            return search_area(address, callback);
+        });
     }
 
-    get_csv('road.csv', function(records){
-        var columns = records.shift();
-        road_name_map = {};
-        road_max_length = {};
+    // 先把一些罕見字替代掉
+    var address = transferRareWord(address);
+    address = address.replace(/^(福建省|台灣省|臺灣省)/, '');
+    address = address.replace(/^(南部科學工業園區|新竹科學工業園區|中部科學工業園區|楠梓加工出口區)/, '');
 
-        records.map(function(rows){
-                var id = rows[0];
-                var name = rows[1];
-                if (!road_name_map[id]) {
-                road_name_map[id] = {};
-                road_max_length[id] = 0;
-                }
+    // 從 address 找出屬於哪個行政區
+    while (true) {
+        // 從長度最長的符合的來找
+        for (var len = Math.min(area_max_length, address.length); len > 0; len --) {
+            var word = address.substr(0, len);
+            if (!area_name_map[word]) {
+                continue;
+            }
 
-                var std_name = transferArabicNumber(name);
-                std_name = transferRareWord(std_name);
-                var fuzzy_names = [];
-                if (std_name.match(/[路街巷]/)) {
-                    fuzzy_names.push(std_name.replace(/[路街巷]/g, 'x'));
-                }
-                road_name_map[id]['s' + std_name] = name; // 完整路名
-                road_name_map[id]['sp' + std_name.substr(0, 1)] = true; // 字首拿來加速
-                fuzzy_names.map(function(fuzzy_name){
-                    road_name_map[id]['f' + fuzzy_name] = name; // 模糊比對路名
-                    road_name_map[id]['fp' + fuzzy_name.substr(0, 1)] = true; // 模糊比對字首
-                });
-                road_max_length[id] = Math.max(road_max_length[id], std_name.length);
-        });
-        return callback(argument);
-    });
+            var area_ids = get_area_ids(area_name_map[word]);
+            return callback(area_ids, address.substr(len));
+        }
+        break;
+    }
+    return callback(null, address);
 };
 
 var search_address = function(area_ids, road, origin_word, warnings, callback) {
@@ -194,165 +309,85 @@ var search_address = function(area_ids, road, origin_word, warnings, callback) {
             return callback('未知的地址元素 ' + word);
         }
     }
+    terms['ROAD'] = road;
+    terms['FULL_ADDR'] = 'COUNTY,TOWN,VILLAGE'.split(',').map(function(k) { return area_name[terms[k]]; }).join('');
+    terms['FULL_ADDR'] += 'NEIGHBORHOOD,ROAD,SECTION,LANE,ALLEY,SUB_ALLEY,TONG,NUMBER'.split(',').map(function(k) { return terms[k]; }).join('');
 
-    var matches = [];
-    get_csv("roads/" + area_ids.county_id + "-" + road + '.csv', function(records){
-        var columns = records.shift();
-        records.map(function(rows) {
-            var values = {};
-            columns.map(function(id, col) {
-                values[id] = rows[col];
-            });
-            for (var id in terms) {
-                if (terms[id] != values[id]) {
-                    if (checkWarning(id, terms[id], values[id])) {
-                        addWarning(values, id + " 欄位不相同");
-                    } else {
-                        return false;
-                    }
-                }
-            }
-            if (warnings.length) {
-                addWarning(values, $arnings);
-            }
-            matches.push(values);
-        });
-
-        if (matches.length == 1) {
-            return callback(matches);
-        }
-
-        // 如果符合超過一個的話，加上警告
-        if (matches.length > 1) {
-            var no_warning_matches = matches.filter(function(v) { return !v['warnings']; });
-            if (no_warning_matches.length == 1) {
-                return callback(no_warning_matches);
-            }
-            addWarning(matches[0], '吻合地址超過一個 (' + matches.map(function(a) { return a.FULL_ADDR; }).join(',') + ')');
-            return callback(matches);
-        }
-
-        // 找出號碼最接近的或是沒有之幾的 1. 門牌最接近的
-        var fuzzy_matches = [null, null];
-        records.map(function(rows){
-            var values = {};
-            columns.map(function(id, col) {
-                values[id] = rows[col];
-            });
-            var fuzzy_type = 0;
-            for (var k in terms) {
-                var v = terms[k];
-                if ('NUMBER' == k) {
-                    var check_number = parseInt(getCleanNumber(v));
-                    var query_number;
-                    try {
-                        query_number = parseInt(getCleanNumber(values[k]));
-                    } catch (e) {
-                        console.log('warning: ' + e);
-                        return;
-                    }
-                    values['clean_number'] = query_number;
-
-                    if (null === fuzzy_matches[1] || Math.abs(query_number - check_number) < Math.abs(check_number - fuzzy_matches[1]['clean_number']) ) {
-                        fuzzy_type = 1;
-                    }
-                } else if (v != values[k]) {
-                    if (checkWarning(k, v, values[k])) {
-                        addWarning(values, k + " 欄位不相同");
-                    } else {
-                        return;
-                    }
-                }
-            }
-            if (fuzzy_type == 1) {
-                if (warnings) {
-                    addWarning(values, warnings);
-                }
-                fuzzy_matches[1] = values;
-            }
-        });
-
-        if (fuzzy_matches[1]) {
-            addWarning(fuzzy_matches[1], '找不到號碼完全吻合，找最接近的');
-            return callback([fuzzy_matches[1]]);
-        }
-
-        return callback("完全找不到吻合地址 " + origin_word);
-    });
+    return callback(terms);
 };
 
 // 從 area_ids 行政區找到 word 是哪一條路
-var search_road = function(area_ids, word, callback){
-    get_road_data([area_ids, word, callback], function(argument){
-        var area_ids = argument[0];
-        var origin_word = argument[1];
-        var callback = argument[2];
+var search_road = function(area_ids, origin_word, callback){
+    if (!data_all_loaded()) {
+        return load_data(function(){
+            search_road(area_ids, word, callback);
+        });
+    }
 
-        if (!road_name_map[area_ids.county_id]) {
-            throw "找不到 " + area_ids.county_id + " 縣市";
+    if (!road_name_map[area_ids.county_id]) {
+        throw "找不到 " + area_ids.county_id + " 縣市";
+    }
+    var terms = {};
+    var word = origin_word;
+    word = transferRareWord(word);
+    word = transferArabicNumber(word);
+
+    var matches;
+    if (matches = word.match(/[0-9]+鄰/)) {
+        terms['NEIGHBORHOOD'] = matches;
+        word = word.substr(matches.length);
+    }
+
+    var c_id = area_ids.county_id;
+    var road_names = road_name_map[c_id];
+
+    var test_skiplen_and_len = function(checking_word, is_fuzzy, skip_len, len, success_callback) {
+        var warnings = [];
+        if (len === null) {
+            len = Math.min(checking_word.length, road_max_length[c_id]);
         }
-        var terms = {};
-        var word = origin_word;
-        word = transferRareWord(word);
-        word = transferArabicNumber(word);
-
-        var matches;
-        if (matches = word.match(/[0-9]+鄰/)) {
-            terms['NEIGHBORHOOD'] = matches;
-            word = word.substr(matches.length);
+        // 如果 len 到 0 以下了都還找不到路名，那就多 skip 一個字元再試試看
+        if (len < 0) {
+            return test_skiplen_and_len(checking_word, is_fuzzy, skip_len + 1, null, success_callback);
         }
 
-        var c_id = area_ids.county_id;
-        var road_names = road_name_map[c_id];
+        // 如果有 skip_len 的話，就要加入警告
+        if (skip_len > 0) {
+            warnings = ["地址中多了 '" + checking_word.substr(0, skip_len) + "'"];
+        }
+        // 如果 skip_len 到底了還沒有東西的話，就要改用模糊比對，仍找不到就表示完全找不到了
+        if (skip_len >= checking_word.length) {
+            if (!is_fuzzy) {
+                return test_skiplen_and_len(checking_word, true, 0, null, success_callback);
+            }
+            return success_callback('找不到資料');
+        }
 
-        var test_skiplen_and_len = function(checking_word, is_fuzzy, skip_len, len, success_callback) {
-            var warnings = [];
-            if (len === null) {
-                len = Math.min(checking_word.length, road_max_length[c_id]);
-            }
-            // 如果 len 到 0 以下了都還找不到路名，那就多 skip 一個字元再試試看
-            if (len < 0) {
-                return test_skiplen_and_len(checking_word, is_fuzzy, skip_len + 1, null, success_callback);
-            }
+        var word = checking_word.substr(skip_len);
+        // 用字首找不到任何路就表示這個字不用找了
+        if (is_fuzzy == false && !road_name_map[c_id]['sp' + word.substr(0, 1)]) {
+            return test_skiplen_and_len(checking_word, is_fuzzy, skip_len + 1, null, success_callback);
+        } else if (is_fuzzy == true && !road_name_map[c_id]['fp' + word.substr(0, 1)]) {
+            return test_skiplen_and_len(checking_word, is_fuzzy, skip_len + 1, null, success_callback);
+        }
+        var w = word.substr(0, len);
+        // 找不到符合路名的話，長度減一再試試看
+        if (!is_fuzzy && 'undefined' == typeof(road_names['s' + w])) {
+            return test_skiplen_and_len(checking_word, is_fuzzy, skip_len, len - 1, success_callback);
+        } else if (is_fuzzy && 'undefined' == typeof(road_names['f' + w])) {
+            return test_skiplen_and_len(checking_word, is_fuzzy, skip_len, len - 1, success_callback);
+        }
 
-            // 如果有 skip_len 的話，就要加入警告
-            if (skip_len > 0) {
-                warnings = ["地址中多了 '" + checking_word.substr(0, skip_len) + "'"];
-            }
-            // 如果 skip_len 到底了還沒有東西的話，就要改用模糊比對，仍找不到就表示完全找不到了
-            if (skip_len >= checking_word.length) {
-                if (!is_fuzzy) {
-                    return test_skiplen_and_len(checking_word, true, 0, null, success_callback);
-                }
-                return success_callback('找不到資料');
-            }
-
-            var word = checking_word.substr(skip_len);
-            // 用字首找不到任何路就表示這個字不用找了
-            if (is_fuzzy == false && !road_name_map[c_id]['sp' + word.substr(0, 1)]) {
-                return test_skiplen_and_len(checking_word, is_fuzzy, skip_len + 1, null, success_callback);
-            } else if (is_fuzzy == true && !road_name_map[c_id]['fp' + word.substr(0, 1)]) {
-                return test_skiplen_and_len(checking_word, is_fuzzy, skip_len + 1, null, success_callback);
-            }
-            var w = word.substr(0, len);
-            // 找不到符合路名的話，長度減一再試試看
-            if (!is_fuzzy && 'undefined' == typeof(road_names['s' + w])) {
+        search_address(area_ids, road_names['s' + w], word.substr(len), warnings, function(ret){
+            if (null === ret || 'string' === typeof(ret)) {
                 return test_skiplen_and_len(checking_word, is_fuzzy, skip_len, len - 1, success_callback);
-            } else if (is_fuzzy && 'undefined' == typeof(road_names['f' + w])) {
-                return test_skiplen_and_len(checking_word, is_fuzzy, skip_len, len - 1, success_callback);
+            } else {
+                return success_callback(ret);
             }
+        });
+    };
 
-            search_address(area_ids, road_names['s' + w], word.substr(len), warnings, function(ret){
-                if (null === ret || 'string' === typeof(ret)) {
-                    return test_skiplen_and_len(checking_word, is_fuzzy, skip_len, len - 1, success_callback);
-                } else {
-                    return success_callback(ret);
-                }
-            });
-        };
-
-        return test_skiplen_and_len(word, false, 0, null, callback);
-    });
+    return test_skiplen_and_len(word, false, 0, null, callback);
 };
 
 var get_csv = function(url, callback){
@@ -361,7 +396,7 @@ var get_csv = function(url, callback){
         var text = this.responseText.replace(/\s+$/m, '');
         callback(text.split("\n").map(function(line) { return line.split(","); }));
     };
-    oReq.open("get", "//ronnywang.github.io/taiwan-address-data/" + url, true);
+    oReq.open("get", url, true);
     oReq.send();
 };
 
