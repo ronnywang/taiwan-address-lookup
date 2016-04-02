@@ -8,15 +8,22 @@ var taipei_query_function = function(parse_address_result, callback){
     var url = 'http://www.houseno.tcg.gov.tw/ASP_FRONT_END/main_.asp';
     var now = new Date;
     var section_map = {'': '', '1段': '一', '2段': '二', '3段': '三', '4段' : '四', '5段': '五', '6段': '六', '7段': '七'};
+    if (parse_address_result.NUMBER.match(/號之/)) {
+        ttrnum = to_wide_num(parse_address_result.NUMBER.split('號之')[0]);
+	ttrg = to_wide_num(parse_address_result.NUMBER.split('號之')[1]);
+    } else {
+	ttrnum = to_wide_num(parse_address_result.NUMBER.replace(/號$/, ''));
+	ttrg = '';
+    }
     var params = 'ttrstyle=2&yy=105&mm=03&dd=16&s_yy=&s_mm=&s_dd=&e_yy=&e_mm=&e_dd=&ttrarea=' +
         '&ttrstreet=' + encodeURIComponent(parse_address_result.ROAD) +
         '&ttrsection=' + encodeURIComponent(section_map[parse_address_result.SECTION]) + 
         '&ttrshi=' + encodeURIComponent(to_wide_num(parse_address_result.LANE.replace(/巷$/, ''))) +
         '&ttrlo=' +
         '&ttrtemp=' +
-        '&ttrnum=' + encodeURIComponent(to_wide_num(parse_address_result.NUMBER.replace(/號$/, ''))) +
+        '&ttrnum=' + encodeURIComponent(ttrnum) +
         '&ttrfloor=' +
-        '&ttrg=' +
+        '&ttrg=' + encodeURIComponent(ttrg) +
         '&ttryear=' +
         '&ttrmonth=&ttrday=&ettryear=&ettrmonth=&ettrday=';
 
