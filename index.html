@@ -8,6 +8,8 @@
 <script src="address-taipei.js"></script>
 <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.css">
 <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.js"></script>
 </head>
 <body>
 <div class="container">
@@ -50,6 +52,7 @@
             </tr>
         </tbody>
     </table>
+    <div id="map" style="width: 200px; height: 200px"></div>
     <h3>parse_address(<span class="input"></span>)</h3>
     <div id="result-parse-address"></div>
     <h3>query_postcode(parse_address_result)</h3>
@@ -74,6 +77,8 @@ $('#address-form').submit(function(e){
                     var $this = $(this);
                     $this.text(merged_result[$this.data('column')]);
             });
+	    map.setView([merged_result['lat'], merged_result['lng']], 15);
+	    marker.setLatLng([merged_result['lat'], merged_result['lng']]);
             $('#result-query-city_data').text(JSON.stringify(city_result, false, 4));
         });
         query_postcode(result, function(postcode_result){
@@ -81,6 +86,13 @@ $('#address-form').submit(function(e){
         });
     });
 }).submit();
+
+var map = L.map('map').setView([24, 121], 12);
+L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+var marker = L.marker([24, 121]);
+marker.addTo(map);
 </script>
 <a href="https://github.com/ronnywang/taiwan-address-lookup"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/365986a132ccd6a44c23a9169022c0b5c890c387/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f7265645f6161303030302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png"></a>
 </body>
