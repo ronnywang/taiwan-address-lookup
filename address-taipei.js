@@ -11,7 +11,7 @@ var taipei_query_function = function(parse_address_result, callback){
     var params = 'ttrstyle=2&yy=105&mm=03&dd=16&s_yy=&s_mm=&s_dd=&e_yy=&e_mm=&e_dd=&ttrarea=' +
         '&ttrstreet=' + encodeURIComponent(parse_address_result.ROAD) +
         '&ttrsection=' + encodeURIComponent(section_map[parse_address_result.SECTION]) + 
-        '&ttrshi=' +
+        '&ttrshi=' + encodeURIComponent(to_wide_num(parse_address_result.LANE.replace(/巷$/, ''))) +
         '&ttrlo=' +
         '&ttrtemp=' +
         '&ttrnum=' + encodeURIComponent(to_wide_num(parse_address_result.NUMBER.replace(/號$/, ''))) +
