@@ -8,6 +8,7 @@ var data_needed = [
 ];
 var data_load_process = {};
 var load_data_callback_queue = [];
+var city_query_function = {};
 
 var data_all_loaded = function() {
     return data_loaded == data_needed.length;
@@ -310,6 +311,7 @@ var search_address = function(area_ids, road, origin_word, warnings, callback) {
         }
     }
     terms['ROAD'] = road;
+    terms['COUNTY_NAME'] = area_name[terms['COUNTY']];
     terms['FULL_ADDR'] = 'COUNTY,TOWN,VILLAGE'.split(',').map(function(k) { return area_name[terms[k]]; }).join('');
     terms['FULL_ADDR'] += 'NEIGHBORHOOD,ROAD,SECTION,LANE,ALLEY,SUB_ALLEY,TONG,NUMBER'.split(',').map(function(k) { return terms[k]; }).join('');
 
@@ -527,3 +529,27 @@ var getCleanNumber = function(w){
     }
     throw "不合法的號 {$w}";
 };
+
+var query_city_data = function(parse_address_result, callback){
+    if ('undefined' === typeof(city_query_function[parse_address_result.COUNTY])) {
+        return callback({
+            error: true,
+            message: "目前不支援 " + parse_address_result.COUNTY_NAME + " 的門牌解析",
+        });
+    }
+
+    city_query_function[parse_address_result.COUNTY](parse_address_result, function(result){
+        callback(result);
+    });
+};
+
+var merge_result = function(results){
+    var result = {};
+    for (var i = 0; i < results.length; i ++) {
+        for (var id in results[i]) {
+            result[id] = results[i][id];
+        }
+    }
+    return result;
+};
+
