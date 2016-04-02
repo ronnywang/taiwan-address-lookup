@@ -22,7 +22,7 @@ var taipei_query_function = function(parse_address_result, callback){
 
     get_content('https://proxy.g0v.ronny.tw/proxy.php?url=' + encodeURIComponent(url + '?' + params), function(tpe_result){
         tpe_result = tpe_result.substring(tpe_result.indexOf('<table id="tb_no_border">'));
-        var matches = tpe_result.match(/SET_RED_POINT\(([0-9.]*),([0-9.]*),2,'([^\']*)'\)" >\s*<font color="#880000">([^<]*)<\/font>\s+<font color="#008800">([^<]*)<\/font>\s+<font color="#000088">([^<]*)<\/font>\s+<font color="#000000">([^<]*)<\/font>\s+<\/a>\s+<td/);
+        var matches = tpe_result.match(/SET_RED_POINT\(([0-9.]*),([0-9.]*),2,'([^\']*)'\)" >\s*<font color="#880000">([^<]*)<\/font>\s+<font color="#008800">([^<]*)<\/font>\s+<font color="#000088">([^<]*)<\/font>\s+<font color="#000000">([^<]*)<\/font>\s+<\/a>\s+<td width=20%><font color="#000000">([^<]*)/);
         if (!matches) {
             return callback({error: true, message: '找不到地址資訊', url: url + '?' + params});
         }
@@ -37,6 +37,8 @@ var taipei_query_function = function(parse_address_result, callback){
         result['lng'] = lng_lat[0];
         result['lat'] = lng_lat[1];
         result['NEIGHBORHOOD'] = matches[6];
+	result['RESULT_ADDRESS'] = matches[7].replace(/&nbsp;/g, '');
+	result['ADDRESS_TIME'] = matches[8].replace(/&nbsp;/g, '');
         callback(result);
     });
 };
