@@ -5,6 +5,7 @@
 <title>Address API</title>
 <script src="//cdnjs.cloudflare.com/ajax/libs/proj4js/2.3.14/proj4-src.js"></script>
 <script src="address.js"></script>
+<script src="address-taipei.js"></script>
 <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.css">
 <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
 </head>
@@ -16,19 +17,65 @@
             <input type="text" id="input" class="form-control" value="台北市市府路1號">
             <button type="submit">轉換</button>
         </form>
-        <h3>parse_address(<span class="input"></span>)</h3>
-        <div id="result-parse-address"></div>
-        <h3>query_postcode(parse_address_result)</h3>
-        <div id="result-query-postcode"></div>
     </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <td>縣市</td>
+                <td>鄉鎮</td>
+                <td>村里</td>
+                <td>鄰</td>
+                <td>路</td>
+                <td>段</td>
+                <td>街</td>
+                <td>巷</td>
+                <td>號</td>
+                <td>經度</td>
+                <td>緯度</td>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="road-result" data-column="COUNTY_NAME"></span></td>
+                <td><span class="road-result" data-column="TOWN_NAME"></span></td>
+                <td><span class="road-result" data-column="VILLAGE_NAME"></span></td>
+                <td><span class="road-result" data-column="NEIGHBORHOOD"></span></td>
+                <td><span class="road-result" data-column="ROAD"></span></td>
+                <td><span class="road-result" data-column="SECTION"></span></td>
+                <td><span class="road-result" data-column="LANE"></span></td>
+                <td><span class="road-result" data-column="ALLEY"></span></td>
+                <td><span class="road-result" data-column="NUMBER"></span></td>
+                <td><span class="road-result" data-column="lng"></span></td>
+                <td><span class="road-result" data-column="lat"></span></td>
+            </tr>
+        </tbody>
+    </table>
+    <h3>parse_address(<span class="input"></span>)</h3>
+    <div id="result-parse-address"></div>
+    <h3>query_postcode(parse_address_result)</h3>
+    <div id="result-query-postcode"></div>
+    <h3>query_city_data(parse_address_result)</h3>
+    <div id="result-query-city_data"></div>
 </div>
 <script>
 $('#address-form').submit(function(e){
     e.preventDefault();
     $('.input').text($('#input').val());
 
+    $('#result-parse-address').text('loading');
+    $('#result-query-city_data').text('loading');
+    $('#result-query-postcode').text('loading');
+
     parse_address($('#input').val(), function(result){
         $('#result-parse-address').text(JSON.stringify(result, false, 4));
+        query_city_data(result, function(city_result) {
+            merged_result = merge_result([result, city_result]);
+            $('.road-result').each(function(){
+                    var $this = $(this);
+                    $this.text(merged_result[$this.data('column')]);
+            });
+            $('#result-query-city_data').text(JSON.stringify(city_result, false, 4));
+        });
         query_postcode(result, function(postcode_result){
             $('#result-query-postcode').text(JSON.stringify(postcode_result, false, 4));
         });
