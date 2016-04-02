@@ -52,6 +52,7 @@
             </tr>
         </tbody>
     </table>
+    <div>錯誤訊息: <span class="road-result" data-column="message"></span></div>
     <div id="map" style="width: 200px; height: 200px"></div>
     <h3>parse_address(<span class="input"></span>)</h3>
     <div id="result-parse-address"></div>
@@ -75,10 +76,16 @@ $('#address-form').submit(function(e){
             merged_result = merge_result([result, city_result]);
             $('.road-result').each(function(){
                     var $this = $(this);
-                    $this.text(merged_result[$this.data('column')]);
+		    if ('undefined' == typeof(merged_result[$this.data('column')])) {
+			$this.text('');
+		    } else {
+			$this.text(merged_result[$this.data('column')]);
+		    }
             });
-	    map.setView([merged_result['lat'], merged_result['lng']], 15);
-	    marker.setLatLng([merged_result['lat'], merged_result['lng']]);
+	    if (merged_result['lat']) {
+		map.setView([merged_result['lat'], merged_result['lng']], 15);
+		marker.setLatLng([merged_result['lat'], merged_result['lng']]);
+	    }
             $('#result-query-city_data').text(JSON.stringify(city_result, false, 4));
         });
         query_postcode(result, function(postcode_result){
